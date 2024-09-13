@@ -1,26 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { db, auth } from '../firebase';
-import { collection, addDoc, Timestamp } from 'firebase/firestore';
+import { useNavigate, useParams } from 'react-router-dom';
+import { db } from '../firebase';
+import { doc, getDoc, updateDoc } from 'firebase/firestore';
 import toast, { Toaster } from 'react-hot-toast';
-import { Filter } from 'bad-words';
 import { ChromePicker } from 'react-color';
+import { Filter } from 'bad-words';
 
 const filter = new Filter();
 
-const CreatePalette = () => {
+const EditPalette = () => {
+  const { id } = useParams();
   const [colors, setColors] = useState(['#FFFFFF', '#000000', '#FF0000', '#00FF00']);
   const [title, setTitle] = useState('');
-  const [user, setUser] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged((currentUser) => {
-      setUser(currentUser);
-    });
-
-    return () => unsubscribe();
-  }, []);
+    const fetchPalette = async () => {
+      const paletteRef = doc(db, 'palettes', id);
+      const paletteSnap = await getDoc(paletteRef);
+      if (paletteSnap.exists()) {
+        const paletteData = paletteSnap.data();
+        setColors(paletteData.colors);
+        setTitle(paletteData.title);
+      } else {
+        toast.error('Palette not found');
+        navigate('/');
+      }
+    };
+    fetchPalette();
+  }, [id, navigate]);
 
   const handleChangeColor = (color, index) => {
     const newColors = [...colors];
@@ -30,11 +38,6 @@ const CreatePalette = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!user) {
-      toast.error('You must be signed in to create a palette.');
-      navigate('/sign-in');
-      return;
-    }
     if (filter.isProfane(title)) {
       toast.error('No profanity allowed in title');
       return;
@@ -44,21 +47,16 @@ const CreatePalette = () => {
       return;
     }
     try {
-      await addDoc(collection(db, 'palettes'), {
+      const paletteRef = doc(db, 'palettes', id);
+      await updateDoc(paletteRef, {
         colors,
         title,
-        createdAt: Timestamp.now(),
-        creatorId: user.uid // Save the creator's ID
       });
-      toast.success('Palette created successfully!');
+      toast.success('Palette updated successfully!');
       navigate('/');
     } catch (error) {
-      toast.error('Failed to create palette');
+      toast.error('Failed to update palette');
     }
-  };
-
-  const handleGoBack = () => {
-    navigate(-1); // Navigate back to the previous page
   };
 
   return (
@@ -68,13 +66,13 @@ const CreatePalette = () => {
       {/* Go Back Button */}
       <button
         className="absolute top-4 right-4 bg-blue-500 text-white px-4 py-2 rounded shadow hover:bg-blue-600 transition"
-        onClick={handleGoBack}
+        onClick={() => navigate(-1)}
       >
         Go Back
       </button>
 
       {/* Title */}
-      <h1 className="text-4xl font-extrabold text-center mb-12 text-gray-800">Create a Palette</h1>
+      <h1 className="text-4xl font-extrabold text-center mb-12 text-gray-800">Edit Palette</h1>
 
       <form onSubmit={handleSubmit} className="space-y-10">
         {/* Title Input and Submit Button in Flex Row */}
@@ -90,9 +88,9 @@ const CreatePalette = () => {
           />
           <button
             type="submit"
-            className="w-1/4 bg-blue-500 text-white px-5 py-3 rounded-lg shadow hover:bg-blue-600 transition"
+            className="w-1/4 bg-green-500 text-white px-5 py-3 rounded-lg shadow hover:bg-green-600 transition"
           >
-            Create
+            Save Changes
           </button>
         </div>
 
@@ -119,4 +117,4 @@ const CreatePalette = () => {
   );
 };
 
-export default CreatePalette;
+export default EditPalette;
